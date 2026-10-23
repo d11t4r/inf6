@@ -1,0 +1,781 @@
+<title>Остров объектов</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Rubik:wght@400;500;700;800&display=swap">
+<style>
+/* Layout: приключение сверху вниз — сцены-уровни на «острове», диалоги кота-проводника между ними; одна светлая игровая тема */
+:root{
+  color-scheme:light;
+  --sky1:#6bb8ec; --sky2:#cdeeff;
+  --grass:#5da34a; --grass-d:#3f7a32; --dirt:#8b5a2b; --dirt-d:#6b4220;
+  --stone:#c6c6c6; --stone-hi:#ffffff; --stone-lo:#555555; --stone-mid:#8b8b8b;
+  --plank:#c79a5b; --plank-d:#8f6634; --paper:#f6e9c4;
+  --ink:#2b2b2b; --ink-soft:#4a4a4a; --dark:#3a3a3a;
+  --xp:#7ed957; --xp-d:#3c8a1f; --gold:#f2c84b;
+  --ok:#2f7a1c; --ok-bg:#cfeec1; --bad:#d9443b; --bad-bg:#f6cdc9; --sel:#ffe27a;
+  --f-pix:"Russo One","Rubik",system-ui,sans-serif;
+  --f-hud:"Rubik",system-ui,sans-serif;
+  --f-body:"Rubik",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--sky1)}
+body{background:linear-gradient(var(--sky1),var(--sky2) 700px,var(--sky2));color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.5}
+img.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+.wrap{max-width:880px;margin:0 auto;padding-block:18px 90px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:22px}
+h1,h2{font-family:var(--f-pix);text-wrap:balance;margin:0;line-height:1.1;font-weight:700}
+p{margin:0}
+button{font:inherit;cursor:pointer;color:var(--ink);border-radius:0}
+button:focus-visible,input:focus-visible{outline:3px solid #ffde3a;outline-offset:2px}
+.mono{font-family:var(--f-mono);font-size:15px;background:rgba(0,0,0,.08);padding:1px 6px;word-break:break-all}
+
+/* HUD */
+.hud{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--dark);color:#fff;padding:9px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:3px solid #000;box-shadow:inset 3px 3px 0 #5a5a5a,inset -3px -3px 0 #1f1f1f}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:21;background:var(--sky1)}
+.hud .who{font-family:var(--f-pix);font-weight:700;font-size:18px;color:var(--gold)}
+.lvl{font-family:var(--f-hud);font-size:11px;color:var(--xp)}
+.xpbar{flex:1;min-width:140px;height:18px;background:#1b1b1b;border:3px solid #000;display:flex}
+.xpbar i{flex:1;border-right:2px solid #000;transition:background .35s}
+.xpbar i:last-child{border-right:none}
+.xpbar i.on{background:linear-gradient(var(--xp) 0 50%,var(--xp-d) 50%)}
+.snd{background:#555;color:#fff;border:3px solid #000;font-family:var(--f-pix);font-size:15px;padding:2px 10px}
+
+/* герой-экран */
+.hero{position:relative;border:3px solid var(--ink);overflow:hidden;padding:22px 20px 0;display:flex;flex-direction:column;gap:12px}
+.hero .sky{position:absolute;inset:0;background:linear-gradient(#4fa6e6,#a8dcff)}
+.sun{position:absolute;right:26px;top:22px;width:48px;height:48px;background:#ffe066;box-shadow:0 0 0 6px #fff1a6}
+.cloud{position:absolute;background:#fff;height:16px;box-shadow:16px -16px 0 #fff,32px 0 0 #fff,48px -16px 0 #fff,64px 0 0 #fff}
+.cloud.a{top:40px;left:46%;width:32px;animation:drift 18s linear infinite}
+@keyframes drift{from{transform:translateX(-60px)}to{transform:translateX(120px)}}
+.hero>*:not(.sky):not(.cloud):not(.sun){position:relative}
+.hero h1{font-size:clamp(34px,7vw,56px);color:#fff;text-shadow:4px 4px 0 var(--ink)}
+.hero .sub{font-family:var(--f-pix);font-size:19px;font-weight:600}
+.hero .scene-row{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:6px}
+.ground{height:44px;margin:0 -20px;background:linear-gradient(var(--grass) 0 12px,var(--grass-d) 12px 16px,transparent 16px),repeating-linear-gradient(90deg,var(--dirt) 0 16px,var(--dirt-d) 16px 20px,var(--dirt) 20px 36px);border-top:3px solid var(--ink)}
+.map{display:flex;flex-wrap:wrap;gap:8px}
+.map span{background:rgba(255,255,255,.85);border:2px solid var(--ink);font-family:var(--f-pix);font-weight:600;font-size:15px;padding:2px 9px}
+.map b{font-family:var(--f-hud);font-size:9px;color:var(--plank-d)}
+
+/* диалог */
+.dialog{display:flex;gap:14px;align-items:flex-start;background:#1f1f1f;color:#fff;border:3px solid #000;box-shadow:inset 3px 3px 0 #555;padding:14px}
+.dialog .npc{flex:none;display:flex;flex-direction:column;align-items:center;gap:4px}
+.dialog .npc span{font-family:var(--f-pix);color:var(--gold);font-weight:700}
+.dialog .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
+.dialog .txt{font-size:18px;min-height:3.2em}
+.dialog .txt b{color:var(--xp)}
+.dialog .txt .mono{background:#000;color:var(--xp)}
+.dialog .nav{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.dialog .pg{font-family:var(--f-hud);font-size:9px;color:#aaa}
+.forbid{font-family:var(--f-hud);font-size:15px;letter-spacing:7px;color:#ff7a72;word-break:break-all}
+
+/* уровень */
+.station{background:var(--stone);border:3px solid var(--ink);box-shadow:inset 3px 3px 0 var(--stone-hi),inset -3px -3px 0 var(--stone-lo),6px 6px 0 rgba(0,0,0,.18);padding:20px;display:flex;flex-direction:column;gap:14px}
+.head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.head h2{font-size:clamp(24px,4.6vw,32px)}
+.badge{font-family:var(--f-hud);font-size:10px;background:var(--grass);color:#fff;padding:8px 10px;border:3px solid var(--ink);text-shadow:2px 2px 0 var(--grass-d);white-space:nowrap}
+.badge.boss{background:var(--bad);text-shadow:2px 2px 0 #7a1c16}
+.time{margin-left:auto;font-family:var(--f-hud);font-size:9px;color:var(--ink-soft)}
+.task{font-weight:500}
+.btn{font-family:var(--f-pix);font-size:19px;font-weight:700;background:var(--grass);color:#fff;text-shadow:2px 2px 0 var(--grass-d);padding:8px 18px;border:3px solid var(--ink);box-shadow:inset 3px 3px 0 #8fd27a,inset -3px -3px 0 var(--grass-d)}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{box-shadow:inset -3px -3px 0 #8fd27a,inset 3px 3px 0 var(--grass-d)}
+.btn.stone{background:var(--stone-mid);text-shadow:2px 2px 0 #444;box-shadow:inset 3px 3px 0 #b5b5b5,inset -3px -3px 0 #555}
+.btn.red{background:var(--bad);text-shadow:2px 2px 0 #7a1c16;box-shadow:inset 3px 3px 0 #f08a83,inset -3px -3px 0 #8e2620}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.msg{font-family:var(--f-pix);font-size:20px;font-weight:700;min-height:1.2em}
+.msg.ok{color:var(--ok)} .msg.no{color:var(--bad)}
+.hearts{display:flex;gap:4px}
+.hearts img.lost{filter:grayscale(1);opacity:.35}
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between}
+.stat{font-family:var(--f-hud);font-size:10px}
+.shake{animation:shake .3s steps(3)}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.pop{animation:pop .3s steps(3)}
+@keyframes pop{50%{transform:scale(1.15)}}
+
+/* сканер */
+.scene{position:relative;border:3px solid var(--ink);background:linear-gradient(#8fd0f7,#cdeeff 70%);padding:18px 12px 0;display:flex;flex-direction:column}
+.scene .objs{display:flex;flex-wrap:wrap;justify-content:space-around;align-items:flex-end;gap:10px;position:relative;z-index:1}
+.scene .ground{margin:0 -12px;height:30px}
+.obj{background:none;border:3px dashed transparent;padding:4px;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:var(--f-pix);font-weight:700}
+.obj:hover{border-color:var(--gold)}
+.obj.done{border-color:var(--xp-d);border-style:solid;background:rgba(126,217,87,.25)}
+.obj .q{font-family:var(--f-hud);font-size:9px;color:var(--ink-soft)}
+.scan{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;background:#111;color:#cfe;border:3px solid #000;padding:14px;font-family:var(--f-mono);font-size:15px}
+.scan .lines{display:flex;flex-direction:column;gap:4px;min-width:0}
+.scan .k{color:var(--gold)}
+.scan .h{font-family:var(--f-pix);font-size:22px;color:var(--xp)}
+@media (max-width:480px){.scan{grid-template-columns:1fr}}
+
+/* аркада-сортировщик */
+.arena{background:#1f1f1f;border:3px solid #000;color:#fff;padding:18px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.word{font-family:var(--f-pix);font-size:clamp(30px,7vw,46px);font-weight:700;color:#fff;text-shadow:3px 3px 0 #000;min-height:1.3em}
+.timer{width:100%;max-width:420px;height:14px;background:#000;border:3px solid #000}
+.timer i{display:block;height:100%;background:var(--gold);width:100%}
+.big2{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:520px}
+.big2 .btn{font-size:clamp(17px,4vw,22px);padding:14px 8px}
+.btn.blue{background:#4a7fd6;text-shadow:2px 2px 0 #24467e;box-shadow:inset 3px 3px 0 #86aef0,inset -3px -3px 0 #2f5aa8}
+.btn.orange{background:#e8892c;text-shadow:2px 2px 0 #8a4a10;box-shadow:inset 3px 3px 0 #f6b673,inset -3px -3px 0 #a65d16}
+.combo{font-family:var(--f-hud);font-size:11px;color:var(--gold);min-height:1em}
+.hint{font-size:14px;color:#bbb}
+
+/* блоки-имена */
+.blocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.blk{border:3px solid #000;padding:14px 6px;font-family:var(--f-pix);font-weight:700;font-size:20px;color:#fff;text-shadow:2px 2px 0 #000;
+  background:var(--dirt);box-shadow:inset 3px 3px 0 #a87445,inset -3px -3px 0 var(--dirt-d)}
+.blk.found{background:var(--gold);color:var(--ink);text-shadow:none;box-shadow:inset 3px 3px 0 #fff0a8,inset -3px -3px 0 #c9962a}
+.blk.miss{background:#555;opacity:.5}
+
+/* инвентарь */
+.inv{display:flex;flex-wrap:wrap;gap:8px;background:#8b8b8b;border:3px solid #000;padding:10px;min-height:96px}
+.slot{background:#8b8b8b;border:3px solid #000;box-shadow:inset 3px 3px 0 #373737,inset -3px -3px 0 #b5b5b5;padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;width:112px;color:#fff;font-family:var(--f-mono);font-size:13px;text-shadow:1px 1px 0 #000;word-break:break-all;text-align:center}
+.slot.sel{background:#b9a64a;outline:3px solid var(--sel)}
+.chests{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.chestbtn{background:var(--paper);border:3px solid #000;padding:10px;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:var(--f-pix);font-weight:700;font-size:18px}
+.chestbtn .n{font-family:var(--f-hud);font-size:9px;color:var(--ink-soft)}
+.chestbtn:hover{background:#fff6d6}
+
+/* проводник */
+.explorer{background:var(--dark);color:#fff;border:3px solid #000;box-shadow:inset 3px 3px 0 #5a5a5a,inset -3px -3px 0 #1f1f1f}
+.ex-bar{display:flex;gap:8px;align-items:center;padding:10px;border-bottom:3px solid #000;flex-wrap:wrap}
+.ex-bar .addr{flex:1;min-width:0;font-family:var(--f-mono);font-size:14px;background:#000;color:var(--xp);padding:7px 10px;overflow-x:auto;white-space:nowrap}
+.ex-bar label{display:flex;align-items:center;gap:6px;font-family:var(--f-pix);font-size:16px}
+.ex-body{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;padding:14px;min-height:170px}
+.ent{background:#8b8b8b;border:3px solid #000;box-shadow:inset 3px 3px 0 #373737,inset -3px -3px 0 #b5b5b5;padding:10px 4px;display:flex;flex-direction:column;align-items:center;gap:6px;color:#fff;font-weight:700;font-size:14px;word-break:break-word;text-align:center;text-shadow:1px 1px 0 #000}
+.ent:hover{background:#a3a3a3}
+.note{margin:0 14px 14px;background:var(--paper);color:var(--ink);border:3px solid #000;padding:10px 12px;display:flex;gap:12px;align-items:center}
+.note .fn{font-family:var(--f-mono);font-size:13px;color:var(--ink-soft);display:block}
+.builder{display:flex;flex-direction:column;gap:10px}
+.pathline{background:#111;color:var(--xp);font-family:var(--f-mono);font-size:16px;border:3px solid #000;padding:12px;min-height:50px;overflow-x:auto;white-space:nowrap}
+.tiles{display:flex;flex-wrap:wrap;gap:8px}
+.tile{background:var(--stone);border:3px solid #000;box-shadow:inset 3px 3px 0 #fff,inset -3px -3px 0 #777;font-family:var(--f-mono);font-weight:700;font-size:15px;padding:8px 12px}
+.tile:disabled{opacity:.35}
+
+/* сапёр */
+.mines{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.mine{background:#efefef;border:3px solid #000;box-shadow:inset 3px 3px 0 #fff,inset -3px -3px 0 #999;padding:12px 8px;font-family:var(--f-mono);font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;justify-content:center;word-break:break-all;min-height:60px}
+.mine.boom{background:#3a1d1b;color:#ff9a90}
+.mine.safe-hit{background:var(--bad-bg)}
+
+/* финал */
+.final{background:var(--dark);color:#fff;border:3px solid #000;padding:24px 18px;display:flex;flex-direction:column;gap:14px;align-items:center;text-align:center}
+.final .big{font-family:var(--f-pix);font-size:clamp(26px,6vw,36px);font-weight:700;color:var(--gold);text-shadow:3px 3px 0 #000}
+.loot{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.loot img{opacity:.2;transition:opacity .3s,transform .3s}
+.loot img.on{opacity:1;transform:scale(1.1)}
+.cert{background:var(--paper);color:var(--ink);border:3px solid #000;box-shadow:inset 0 0 0 5px var(--plank);padding:16px 18px;max-width:520px;display:flex;flex-direction:column;gap:6px}
+.cert .rank{font-family:var(--f-pix);font-size:26px;font-weight:700;color:var(--plank-d)}
+.hw{background:var(--paper);color:var(--ink);border:3px solid #000;padding:12px 14px;text-align:left;max-width:560px}
+
+.toast{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;background:#212121;color:#fff;border:3px solid #000;box-shadow:inset 2px 2px 0 #555;padding:10px 14px;display:flex;gap:12px;align-items:center;max-width:min(360px,calc(100vw - 32px));transform:translateY(170%);transition:transform .35s steps(5)}
+.toast.show{transform:none}
+.toast .tt{font-family:var(--f-pix);color:var(--gold);font-size:17px;font-weight:700}
+
+/* читаемые размеры для служебных подписей */
+.lvl,.stat,.badge,.time,.combo,.map b,.chestbtn .n,.obj .q{font-weight:800;letter-spacing:.02em}
+.lvl{font-size:16px}.stat{font-size:16px}.badge{font-size:14px}.time{font-size:14px}.combo{font-size:18px}
+.map b{font-size:13px}.chestbtn .n{font-size:13px}.obj .q{font-size:14px}
+.btn,.msg,.blk,.chestbtn,.riddle .ans{font-weight:400}
+.forbid{font-family:var(--f-mono);font-weight:700;font-size:20px;letter-spacing:8px;color:var(--bad)}
+.memo{background:var(--paper);border:3px solid var(--ink);box-shadow:inset 0 0 0 4px var(--plank);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.memo h2{font-size:24px;display:flex;align-items:center;gap:10px}
+.memo ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.memo .mono{background:rgba(0,0,0,.08)}
+
+/* бонус-остров */
+.bonus-banner{background:linear-gradient(#2b2a5a,#4b3f8f);color:#fff;border:3px solid #000;padding:22px 20px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+.bonus-banner h2{font-size:clamp(28px,6vw,40px);color:var(--gold);text-shadow:3px 3px 0 #000}
+.bonus-banner .stars{position:absolute;inset:0;background-image:radial-gradient(#fff 1px,transparent 1.5px);background-size:38px 38px;opacity:.35}
+.bonus-banner>*:not(.stars){position:relative}
+.badge.bonus{background:#6a55c8;text-shadow:2px 2px 0 #2b2a5a}
+.river{display:grid;grid-template-columns:60px repeat(8,minmax(0,1fr)) 60px;align-items:center;border:3px solid #000;min-height:96px;background:repeating-linear-gradient(90deg,#3f78d0 0 22px,#4a86dc 22px 30px)}
+.river .bank{background:var(--grass);align-self:stretch;display:flex;align-items:center;justify-content:center;border-right:3px solid #000}
+.river .bank.r{border-right:none;border-left:3px solid #000}
+.river .pl{height:30px;margin:0 2px;border:2px dashed rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;position:relative}
+.river .pl.on{background:var(--plank);border:2px solid #000;box-shadow:inset 0 -4px 0 var(--plank-d)}
+.river .pl img,.river .bank img{position:relative;z-index:1}
+.river .pl img{margin-top:-46px}
+.relcard{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;font-family:var(--f-pix);font-size:clamp(24px,5vw,32px);text-align:center;background:#fffaf0;border:3px solid #000;padding:16px}
+.relcard .gap{min-width:120px;border-bottom:4px dashed var(--ink);font-size:18px;color:var(--ink-soft);padding:0 8px}
+.sentence{font-weight:700;color:var(--ok);min-height:1.4em}
+.craft{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:600px){.craft{grid-template-columns:1fr}}
+.bench{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:#8b8b8b;border:3px solid #000;padding:6px}
+.bench div{min-height:62px;background:#8b8b8b;border:3px solid #000;box-shadow:inset 3px 3px 0 #373737,inset -3px -3px 0 #b5b5b5;color:#fff;font-weight:700;font-size:14px;text-shadow:1px 1px 0 #000;display:flex;align-items:center;justify-content:center;text-align:center;padding:4px;word-break:break-word}
+.bench div.full{background:#6f9a5a}
+.sysbox{background:#fffaf0;border:3px solid #000;padding:14px;display:flex;flex-direction:column;gap:10px}
+.sysbox .name{font-family:var(--f-pix);font-size:26px}
+.effect{display:flex;flex-direction:column;gap:8px}
+.effect button{text-align:left;background:#efefef;border:3px solid #000;padding:10px 12px;font-weight:600}
+.effect button.good{background:var(--ok-bg);border-color:var(--ok)}
+.effect button.bad{background:var(--bad-bg);border-color:var(--bad)}
+.pc-bins{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.bin{background:var(--paper);border:3px solid #000;padding:10px;display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center}
+.bin b{font-family:var(--f-pix);font-size:19px;font-weight:400}
+.bin .sub{font-size:13px;color:var(--ink-soft)}
+.bin .got{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;font-size:13px}
+.bin .got span{background:#fff;border:2px solid #000;padding:0 6px}
+.bin:hover{background:#fff6d6}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="hud" role="status">
+  <span class="who">Фёдор</span>
+  <span class="lvl" id="lvl">УР. 0</span>
+  <div class="xpbar" id="xpbar" aria-hidden="true"></div>
+</div>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="sky"></div><div class="sun"></div><div class="cloud a"></div>
+    <p class="sub">Информатика · 6 класс · урок 2</p>
+    <h1>Остров объектов</h1>
+    <p class="sub">Фёдор, ты на загадочном острове. Пройди 6 уровней, собери алмазы и найди спрятанный клад! А если справишься быстро, тебя ждёт бонус-остров.</p>
+    <div class="map">
+      <span><b>8′</b> сканер</span><span><b>8′</b> сортировщик</span><span><b>6′</b> имена</span>
+      <span><b>10′</b> инвентарь</span><span><b>15′</b> босс: клад</span><span><b>8′</b> сапёр</span><span><b>+20′</b> бонус-остров</span><span><b>5′</b> итог</span>
+    </div>
+    <div class="scene-row">
+      <img class="px" data-s="tree" data-z="6" alt="">
+      <img class="px" data-s="cat" data-z="5" alt="">
+      <img class="px" data-s="chest" data-z="5" alt="">
+      <img class="px" data-s="torch" data-z="5" alt="">
+      <img class="px" data-s="frog" data-z="4" alt="">
+    </div>
+    <div class="ground"></div>
+  </header>
+
+  
+
+  <!-- 1 СКАНЕР -->
+  <section class="station" id="L1">
+    <div class="head"><span class="badge">УРОВЕНЬ 1</span><h2>Сканер объектов</h2><span class="time">8 мин</span></div>
+    <p class="task">Нажимай на всё, что видишь на острове. Сканер покажет имя объекта, его свойства и действия. Отсканируй все 6 объектов!</p>
+    <div class="scene"><div class="objs" id="scene"></div><div class="ground"></div></div>
+    <div class="scan" id="scanOut"><img class="px" data-s="qblock" data-z="5" alt=""><div class="lines"><span class="h">Сканер готов</span><span>Выбери объект на картинке…</span></div></div>
+    <div class="bar"><span class="stat" id="scanCnt">0 / 6</span><span class="msg" id="m1"></span></div>
+  </section>
+
+  <div class="memo"><h2><img class="px" data-s="book" data-z="3" alt="">Запомни: объект</h2><ul>
+<li><b>Объект</b> — всё, что можно назвать и рассмотреть отдельно.</li>
+<li><b>Общее имя</b> — для целой группы: <i>кот, река</i>. <b>Собственное</b> — для одного объекта, с большой буквы: <i>Барсик, Волга</i>.</li>
+<li><b>Свойство</b> отвечает на вопрос «какой?»: рыжий, тяжёлый. <b>Действие</b> — на вопрос «что делает?»: мурлычет, прыгает.</li></ul></div>
+
+  <!-- 2 СОРТИРОВЩИК -->
+  <section class="station" id="L2">
+    <div class="head"><span class="badge">УРОВЕНЬ 2</span><h2>Сортировщик: успей за 6 секунд!</h2><span class="time">8 мин</span></div>
+    <p class="task">Появляется слово. Быстро реши: это <b>свойство</b> (какой?) или <b>действие</b> (что делает?). Ошибка или опоздание — минус сердечко. Серия верных ответов даёт комбо!</p>
+    <div class="arena" id="arena">
+      <div class="bar" style="width:100%"><div class="hearts" id="h2"></div><span class="combo" id="combo"></span><span class="stat" id="prog2">0 / 14</span></div>
+      <div class="word" id="word">Готов?</div>
+      <div class="timer"><i id="tbar"></i></div>
+      <div class="big2">
+        <button class="btn blue" id="bProp" disabled>◀ Свойство</button>
+        <button class="btn orange" id="bAct" disabled>Действие ▶</button>
+      </div>
+      <button class="btn" id="start2">Старт!</button>
+      <span class="hint">На компьютере можно жать стрелки ← и →</span>
+    </div>
+    <span class="msg" id="m2"></span>
+  </section>
+
+  <!-- 3 ИМЕНА -->
+  <section class="station" id="L3">
+    <div class="head"><span class="badge">УРОВЕНЬ 3</span><h2>Добыча собственных имён</h2><span class="time">6 мин</span></div>
+    <p class="task">Среди блоков спрятаны 6 <b>собственных имён</b>, то есть имён одного-единственного объекта. Добудь их все! Удар по общему имени отнимает сердечко.</p>
+    <div class="bar"><div class="hearts" id="h3"></div><span class="stat" id="prog3">0 / 6</span></div>
+    <div class="blocks" id="blocks"></div>
+    <span class="msg" id="m3"></span>
+  </section>
+
+  <div class="memo"><h2><img class="px" data-s="folder" data-z="3" alt="">Запомни: файлы и папки</h2><ul>
+<li><b>Файл</b> — информация, сохранённая под своим именем (как предмет в инвентаре). <b>Папка</b> хранит файлы и другие папки (как сундук).</li>
+<li><span class="mono">закат.png</span>: до точки — <b>имя</b>, после точки — <b>расширение</b>. Оно подсказывает, что внутри.</li>
+<li><b>Путь</b> — диск, папки по порядку, имя файла. Разделитель — обратная косая черта: <span class="mono">C:\Игры\Скриншоты\закат.png</span></li>
+<li>В имени файла нельзя: <span class="forbid">\ / : * ? " &lt; &gt; |</span></li></ul></div>
+
+  <!-- 4 ИНВЕНТАРЬ -->
+  <section class="station" id="L4">
+    <div class="head"><span class="badge">УРОВЕНЬ 4</span><h2>Разбери инвентарь</h2><span class="time">10 мин</span></div>
+    <p class="task">В инвентаре бардак! Нажми на файл, потом на сундук, куда он подходит. Смотри на <b>расширение</b> — оно подскажет, что внутри.</p>
+    <div class="bar"><div class="hearts" id="h4"></div><span class="stat" id="prog4">0 / 12</span></div>
+    <div class="inv" id="inv"></div>
+    <div class="chests" id="chests"></div>
+    <span class="msg" id="m4"></span>
+  </section>
+
+  <!-- 5 БОСС -->
+  <section class="station" id="L5">
+    <div class="head"><span class="badge boss">БОСС-УРОВЕНЬ</span><h2>Клад на острове</h2><span class="time">15 мин</span></div>
+    <p class="task">Где-то на диске C: спрятан <span class="mono">КЛАД.txt</span>. Открывай папки и читай подсказки. Осторожно: в некоторых папках ловушки! Записывай в тетрадь, через какие папки ты прошёл.</p>
+    <div class="bar"><div class="hearts" id="h5"></div><span class="stat" id="steps">Шагов: 0</span></div>
+    <div class="explorer">
+      <div class="ex-bar">
+        <button class="btn stone" id="exUp">⬆ Назад</button>
+        <div class="addr" id="exAddr" aria-live="polite"></div>
+        <label><input type="checkbox" id="exShow"> адрес</label>
+      </div>
+      <div class="ex-body" id="exBody"></div>
+      <div class="note" id="exNote" hidden></div>
+    </div>
+    <div class="builder" id="builder" hidden>
+      <p class="task"><b>Финальный удар!</b> Собери полный путь к кладу из блоков. Нажимай их по порядку, косые черты <span class="mono">\</span> поставятся сами.</p>
+      <div class="pathline" id="pathline">&nbsp;</div>
+      <div class="tiles" id="tiles"></div>
+      <div class="row"><button class="btn stone" id="pDel">⌫ Стереть</button><button class="btn red" id="pCheck">Удар!</button></div>
+    </div>
+    <span class="msg" id="m5"></span>
+  </section>
+
+  <!-- 6 САПЁР -->
+  <section class="station" id="L6">
+    <div class="head"><span class="badge">УРОВЕНЬ 6</span><h2>Сапёр имён файлов</h2><span class="time">8 мин</span></div>
+    <p class="task">В некоторых именах файлов спрятаны запрещённые символы <span class="mono">\ / : * ? " &lt; &gt; |</span>. Взорви все опасные имена за 30 секунд! Нажмёшь на нормальное имя — минус сердечко.</p>
+    <div class="bar"><div class="hearts" id="h6"></div><span class="stat" id="t6">30 сек</span><span class="stat" id="prog6">0 / 6</span></div>
+    <div class="mines" id="mines"></div>
+    <div class="row"><button class="btn" id="start6">Старт!</button></div>
+    <span class="msg" id="m6"></span>
+  </section>
+
+  
+
+  <!-- БОНУС-ОСТРОВ -->
+  <section class="bonus-banner">
+    <div class="stars"></div>
+    <h2>Бонус-остров</h2>
+    <p>Справился быстро? Тогда для тебя открыт тайный остров: ещё 3 уровня и 3 алмаза. Здесь объекты начинают дружить, собираться в системы, а в конце ты разберёшь по частям сам компьютер.</p>
+  </section>
+
+  <div class="memo"><h2><img class="px" data-s="map" data-z="3" alt="">Запомни: отношения объектов</h2><ul>
+<li><b>Состоит из</b> — объект собран из частей: <i>велосипед состоит из колёс, руля и рамы</i>. Часть и целое.</li>
+<li><b>Является разновидностью</b> — объект входит в более широкую группу: <i>берёза является разновидностью дерева</i>. Вид и группа.</li>
+<li>Проверка: можно ли сказать «… — это часть …»? Значит, «состоит из». Можно сказать «… — это вид …»? Значит, «разновидность».</li></ul></div>
+
+  <!-- 7 МОСТ -->
+  <section class="station" id="L7">
+    <div class="head"><span class="badge bonus">БОНУС 1</span><h2>Мост для лягушки</h2><span class="time">6 мин</span></div>
+    <p class="task">Лягушке нужно перебраться через реку. За каждое верное отношение между объектами появляется доска моста. Ошибка — минус сердечко.</p>
+    <div class="bar"><div class="hearts" id="h7"></div><span class="stat" id="prog7">0 / 8</span></div>
+    <div class="river" id="river"></div>
+    <div class="relcard" id="relcard"></div>
+    <div class="big2" style="margin:0 auto">
+      <button class="btn blue" id="rel1">состоит из</button>
+      <button class="btn orange" id="rel2">является разновидностью</button>
+    </div>
+    <div class="sentence" id="sent7"></div>
+    <span class="msg" id="m7"></span>
+  </section>
+
+  <div class="memo"><h2><img class="px" data-s="gear" data-z="3" alt="">Запомни: системы</h2><ul>
+<li><b>Система</b> — целое, которое состоит из частей, связанных между собой. Велосипед, футбольная команда, компьютер — системы.</li>
+<li>Если убрать важную часть или перемешать части, система перестанет работать.</li>
+<li><b>Системный эффект</b> — то, что умеет целое, но не умеет ни одна часть по отдельности. Колесо само не поедет, руль тоже, а велосипед едет.</li></ul></div>
+
+  <!-- 8 ВЕРСТАК -->
+  <section class="station" id="L8">
+    <div class="head"><span class="badge bonus">БОНУС 2</span><h2>Верстак систем</h2><span class="time">8 мин</span></div>
+    <p class="task">Скрафти систему: положи на верстак только её части, лишнее не бери. Потом угадай <b>системный эффект</b>, то есть что умеет только целая система.</p>
+    <div class="bar"><div class="hearts" id="h8"></div><span class="stat" id="prog8">Система 1 / 3</span></div>
+    <div class="craft">
+      <div class="sysbox">
+        <span class="name" id="sysName"></span>
+        <div class="bench" id="bench"></div>
+        <div class="tiles" id="parts"></div>
+      </div>
+      <div class="sysbox" id="effBox" hidden>
+        <b>Что умеет эта система, но не умеет ни одна её часть?</b>
+        <div class="effect" id="effect"></div>
+      </div>
+    </div>
+    <span class="msg" id="m8"></span>
+  </section>
+
+  <div class="memo"><h2><img class="px" data-s="cpu" data-z="3" alt="">Запомни: компьютер как система</h2><ul>
+<li><b>Железо</b> (аппаратное обеспечение) — устройства, которые можно потрогать. <b>Софт</b> (программное обеспечение) — программы, их потрогать нельзя.</li>
+<li><b>Ввод</b> — передают информацию в компьютер: клавиатура, мышь, микрофон. <b>Вывод</b> — выдают её нам: монитор, колонки, принтер.</li>
+<li><b>Обработка</b> — процессор, «мозг» компьютера. <b>Хранение</b> — память: жёсткий диск, флешка.</li>
+<li>Системный эффект компьютера: железо без программ ничего не делает, программы без железа не запустятся. Вместе они работают.</li></ul></div>
+
+  <!-- 9 ЛАБОРАТОРИЯ -->
+  <section class="station" id="L9">
+    <div class="head"><span class="badge boss">ФИНАЛЬНЫЙ БОСС</span><h2>Разбери компьютер</h2><span class="time">8 мин</span></div>
+    <p class="task">Компьютер рассыпался на детали и программы! Нажми на предмет, потом на нужный отсек. Программы отправляй в отсек «Софт».</p>
+    <div class="bar"><div class="hearts" id="h9"></div><span class="stat" id="prog9">0 / 13</span></div>
+    <div class="inv" id="pcInv"></div>
+    <div class="pc-bins" id="pcBins"></div>
+    <span class="msg" id="m9"></span>
+  </section>
+
+  <section class="final">
+    <div class="big" id="finalTitle">Алмазов: 0 из 9</div>
+    <div class="loot" id="loot"></div>
+    <div class="cert">
+      <span>Настоящим подтверждается, что</span>
+      <span class="rank">Фёдор</span>
+      <span>получает звание</span>
+      <span class="rank" id="rank">Новичок острова</span>
+    </div>
+    <div class="hw"><b>Домашний квест:</b> нарисуй дерево папок своего телефона или любимой игры и напиши полный путь к одному файлу. Бонус: придумай свою загадку «угадай объект по свойствам и действиям».</div>
+    <button class="btn stone" id="reset">Пройти заново</button>
+  </section>
+</div>
+
+<div class="toast" id="toast" aria-live="polite">
+  <img class="px" data-s="gem" data-z="3" alt="">
+  <div><div class="tt">Достижение получено!</div><div id="toastText"></div></div>
+</div>
+
+<script>
+/* ===== спрайты ===== */
+const PAL={k:'#2b2b2b',g:'#5da34a',G:'#3f7a32',d:'#8b5a2b',D:'#6b4220',b:'#a0692e',B:'#6d4518',y:'#f2c84b',Y:'#c9962a',c:'#5fe0d6',C:'#2aa59c',w:'#ffffff',s:'#b0b0b0',S:'#6a6a6a',o:'#f08a2a',r:'#d9443b',R:'#9e2a24',p:'#f4a4a4',l:'#eeeeee',m:'#6cc24a',M:'#3e8a2a',u:'#4a7fd6',U:'#2f5aa8',z:'#f3d98b',Z:'#d9b860'};
+const SPR={
+grass:["gGgggGgggGgg","ggggGggGgggg","gdgGgdgggdGg","dddgddddgddd","ddDddddDdddd","dddddDdddddd","dDddddddDddd","ddddDdddddDd","ddDdddddDddd","dddddDdddddd","dDdddddddDdd","dddDdddddddd"],
+chest:["............",".BBBBBBBBBB.",".BbbbbbbbbB.",".BbbbbbbbbB.",".BbbbbbbbbB.",".BBBBYYBBBB.",".BbbbYYbbbB.",".BbbbbbbbbB.",".BbbbbbbbbB.",".BbbbbbbbbB.",".BBBBBBBBBB.","............"],
+gem:["............","............","...kkkkkk...","..kwwcccCk..",".kwcccccCCk.",".kcccccCCCk.","..kcccCCCk..","...kccCCk...","....kcCk....",".....kk.....","............","............"],
+torch:["............",".....yy.....","....yooy....","....oroo....",".....bb.....",".....bB.....",".....bB.....",".....bB.....",".....bB.....",".....bB.....","............","............"],
+folder:["............","............",".YYYY.......",".YyyyY......",".YYYYYYYYYY.",".YyyyyyyyyY.",".YyyyyyyyyY.",".YyyyyyyyyY.",".YyyyyyyyyY.",".YYYYYYYYYY.","............","............"],
+file:["............","..kkkkkk....","..klllllk...","..klllllk...","..kSSSSlkk..","..klllllllk.","..kSSSSSSlk.","..klllllllk.","..kSSSSSSlk.","..klllllllk.","..kkkkkkkkk.","............"],
+cat:["............",".o........o.",".oo......oo.",".oooooooooo.",".ookooookoo.",".oooooooooo.",".ooooppoooo.",".oooooooooo.","..oooooooo..","...oooooo...","............","............"],
+frog:["............","..mm....mm..",".mwkm..mkwm.",".mmmmmmmmmm.","mmmmmmmmmmmm","mMrrrrrrrrMm","mmmmmmmmmmmm",".mmmmmmmmmm.",".MM......MM.","MMM......MMM","............","............"],
+ball:["............","....rrrr....","..rrwwrrrr..",".rrwwrrrrrr.",".rrrrrrrrrr.",".wwwwwwwwww.",".uuuuuuuuuu.",".uuuuuuuuuu.","..uuuuuuuu..","....uuuu....","............","............"],
+bat:["............","............","............","kk..k..k..kk","kkk.kkkk.kkk","kkkkrkkrkkkk",".kkkkkkkkkk.","..kk.kk.kk..","............","............","............","............"],
+tree:["....gggg....","..gggGgggg..",".gGggggggGg.",".gggggGgggg.","gggGggggggGg",".gggggggGgg.","..ggGgggg...",".....bB.....",".....bB.....",".....bB.....","....bbBB....","............"],
+beach:["..........yy",".........yyy","............","uuuuuuuuuuuu","uwuuuuwuuuuu","uuuuuuuuuuuu","zzzzzzzzzzzz","zZzzzzzZzzzz","zzzzZzzzzzZz","zzzzzzzzzzzz","zzZzzzzzZzzz","zzzzzzzzzzzz"],
+book:["............",".BBBBBBBBBB.",".BrrrrrrrrB.",".BryyyyyyrB.",".BrrrrrrrrB.",".BrrrrrrrrB.",".BrrrrrrrrB.",".BrrrrrrrrB.",".BllllllllB.",".BBBBBBBBBB.","............","............"],
+qblock:["YYYYYYYYYYYY","YyyyyyyyyyyY","YyyykkkkyyyY","YyykyyyykyyY","YyyyyyyykyyY","YyyyyykkyyyY","YyyyykyyyyyY","YyyyyyyyyyyY","YyyyykyyyyyY","YyyyyyyyyyyY","YyyyyyyyyyyY","YYYYYYYYYYYY"],
+map:["............",".zzzzzzzzzz.",".zZzzzzzzzz.",".zzzrzzzzzz.",".zzzzrzzZzz.",".zZzzzrrzzz.",".zzzzzzzrzz.",".zzzzZzzzrz.",".zzzzzzzzRz.",".zzzzzzzzzz.","............","............"],
+tnt:["rrrrrrrrrrrr","rRrRrRrRrRrR","rrrrrrrrrrrr","llllllllllll","lkkklkllkkkl","llkllkklllkl","llkllklkllkl","llllllllllll","rrrrrrrrrrrr","rRrRrRrRrRrR","rrrrrrrrrrrr","rrrrrrrrrrrr"],
+heart:["............","..rrr..rrr..",".rrwrrrrrrr.",".rwrrrrrrrr.",".rrrrrrrrrr.","..rrrrrrrr..","...rrrrrr...","....rrrr....",".....rr.....","............","............","............"],
+note:["............",".......kkkk.",".......kkkk.",".......k..k.",".......k..k.",".......k..k.","....kkkk.kkk","...kkkkkkkkk","...kkkk.kkkk","....kk...kk.","............","............"],
+film:["............","kkkkkkkkkkkk","klkllkllkllk","kkkkkkkkkkkk","kuuuuuuuuuuk","kuuwuuuuuuuk","kuuuuuuuuuuk","kkkkkkkkkkkk","klkllkllkllk","kkkkkkkkkkkk","............","............"],
+pic:["............","kkkkkkkkkkkk","kuuuuuuyyuuk","kuuuuuuyyuuk","kuuuuuuuuuuk","kuuugguuuuuk","kuugggguuguk","kugggggggggk","kggggggggggk","kkkkkkkkkkkk","............","............"],
+monitor:["............","kkkkkkkkkkkk","kuuuuuuuuuuk","kuwuuuuuuuuk","kuuuuuuuuuuk","kuuuuuuuuuuk","kuuuuuuuuuuk","kkkkkkkkkkkk",".....SS.....","....SSSS....","...SSSSSS...","............"],
+mouse:["............","......k.....","....llkll...","...lllklll..","...lllklll..","...lllllll..","...lllllll..","...lllllll..","...SlllllS..","....SSSSS...","............","............"],
+keyboard:["............","............","............","kkkkkkkkkkkk","kslslslslslk","kkkkkkkkkkkk","klslslslslsk","kkkkkkkkkkkk","kssllllllssk","kkkkkkkkkkkk","............","............"],
+cpu:["..s.s.s.s...","..s.s.s.s...",".kkkkkkkkk..","skSSSSSSSks.",".kSuuuuuSk..","skSuuuuuSks.",".kSuuuuuSk..","skSSSSSSSks.",".kkkkkkkkk..","..s.s.s.s...","..s.s.s.s...","............"],
+disk:["............",".kkkkkkkkkk.",".kSSSSSSSSk.",".kSlllllSSk.",".kSlSSSlSSk.",".kSlllllSSk.",".kSSSSSSSSk.",".kSSSSSSrSk.",".kkkkkkkkkk.","............","............","............"],
+speaker:["............",".kkkkkk.....",".kSSSSk..k..",".kSkkSk.k.k.",".kSkkSk.k.k.",".kSSSSk..k..",".kSkkSk.....",".kSkkSk.....",".kSSSSk.....",".kkkkkk.....","............","............"],
+printer:["............","...llllll...","...llllll...",".kkkkkkkkkk.",".kSSSSSSSSk.",".kSSSSSSgSk.",".kkkkkkkkkk.","..klllllk...","..kSSSSSk...","..klllllk...","............","............"],
+app:["............","kkkkkkkkkkkk","kuuuuuuuuurk","kkkkkkkkkkkk","kllllllllllk","klSSSSSllllk","kllllllllllk","klSSSllllllk","kllllllllllk","kkkkkkkkkkkk","............","............"],
+gear:["............",".....SS.....","..S.SSSS.S..","...SSSSSS...","..SSSllSSS..",".SSSl..lSSS.",".SSSl..lSSS.","..SSSllSSS..","...SSSSSS...","..S.SSSS.S..",".....SS.....","............"]
+};
+const URL_={};
+function spriteURL(n){ if(URL_[n]) return URL_[n]; const rows=SPR[n],c=document.createElement('canvas'); c.width=rows[0].length;c.height=rows.length; const x=c.getContext('2d'); rows.forEach((r,j)=>[...r].forEach((ch,i)=>{if(PAL[ch]){x.fillStyle=PAL[ch];x.fillRect(i,j,1,1);}})); return URL_[n]=c.toDataURL(); }
+const sprite=(n,z=3,cls='')=>`<img class="px ${cls}" src="${spriteURL(n)}" width="${12*z}" height="${12*z}" alt="">`;
+function paintSprites(root=document){ root.querySelectorAll('img[data-s]').forEach(im=>{const z=+im.dataset.z||3;im.src=spriteURL(im.dataset.s);im.width=12*z;im.height=12*z;}); }
+const $=id=>document.getElementById(id);
+const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;};
+
+
+/* ===== прогресс ===== */
+const TOTAL=9, solved=new Set();
+const ACH={L1:'Исследователь острова',L2:'Молниеносный сортировщик',L3:'Шахтёр имён',L4:'Хранитель инвентаря',L5:'Победитель босса',L6:'Сапёр-профи',L7:'Строитель мостов',L8:'Инженер систем',L9:'Разборщик компьютеров'};
+const RANKS=['Новичок острова','Юный исследователь','Юный исследователь','Знаток объектов','Знаток объектов','Мастер файлов','Мастер файлов','Строитель связей','Инженер систем','Легенда острова объектов'];
+$('xpbar').innerHTML='<i></i>'.repeat(TOTAL);
+$('loot').innerHTML=Array.from({length:TOTAL},()=>sprite('gem',4)).join('');
+function render(){
+  const n=solved.size;
+  [...$('xpbar').children].forEach((e,i)=>e.classList.toggle('on',i<n));
+  [...$('loot').children].forEach((e,i)=>e.classList.toggle('on',i<n));
+  $('lvl').textContent='УР. '+n; $('finalTitle').textContent=`Алмазов: ${n} из ${TOTAL}`; $('rank').textContent=RANKS[n];
+}
+let tt;
+function win(id){ if(solved.has(id)) return; solved.add(id); render();   $('toastText').textContent=ACH[id]; $('toast').classList.add('show'); clearTimeout(tt); tt=setTimeout(()=>$('toast').classList.remove('show'),2800); }
+function msg(id,t,ok){ const m=$(id); m.textContent=t; m.className='msg '+(ok?'ok':'no'); }
+function hearts(id,n,max=3){ $(id).innerHTML=Array.from({length:max},(_,i)=>sprite('heart',2,i<n?'':'lost')).join(''); }
+function shake(el){ el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+
+/* ===== 1. сканер ===== */
+const OBJS=[
+ {s:'tree',name:'Дерево',props:'зелёное, высокое, с толстым стволом',acts:'растёт, шумит листьями, даёт тень'},
+ {s:'frog',name:'Лягушка',props:'зелёная, мокрая, прыгучая',acts:'квакает, прыгает, ловит мух'},
+ {s:'chest',name:'Сундук',props:'деревянный, тяжёлый, с замком',acts:'открывается, закрывается, хранит вещи'},
+ {s:'torch',name:'Факел',props:'яркий, горячий, деревянный',acts:'горит, освещает пещеру'},
+ {s:'ball',name:'Мяч',props:'круглый, резиновый, лёгкий',acts:'прыгает, катится, летает'},
+ {s:'bat',name:'Летучая мышь',props:'чёрная, маленькая, с крыльями',acts:'летает, пищит, спит вниз головой'}
+];
+const scanned=new Set();
+function buildScene(){
+  $('scene').innerHTML=OBJS.map((o,i)=>`<button class="obj${scanned.has(i)?' done':''}" data-i="${i}" aria-label="Сканировать объект">${sprite(o.s,5)}<span class="q">${scanned.has(i)?'✓':'?'}</span></button>`).join('');
+  $('scanCnt').textContent=`${scanned.size} / 6`;
+}
+$('scene').addEventListener('click',e=>{
+  const b=e.target.closest('.obj'); if(!b) return; const i=+b.dataset.i, o=OBJS[i];
+  $('scanOut').innerHTML=`${sprite(o.s,6)}<div class="lines"><span class="h">Сканирую…</span></div>`;   setTimeout(()=>{
+    $('scanOut').innerHTML=`${sprite(o.s,6)}<div class="lines"><span class="h">${o.name}</span><span><span class="k">ИМЯ:</span> ${o.name.toLowerCase()} (общее)</span><span><span class="k">СВОЙСТВА:</span> ${o.props}</span><span><span class="k">ДЕЙСТВИЯ:</span> ${o.acts}</span></div>`;
+    if(!scanned.has(i)){ scanned.add(i); buildScene(); }
+    if(scanned.size===OBJS.length){ msg('m1','Остров изучен! +1 алмаз',true); win('L1'); }
+  },450);
+});
+
+/* ===== 2. сортировщик ===== */
+const WORDS=[['рыжий','P'],['мурлычет','A'],['квадратный','P'],['летает','A'],['тяжёлый','P'],['прыгает','A'],['деревянный','P'],['кусается','A'],['быстрый','P'],['плавает','A'],['стеклянный','P'],['рычит','A'],['пушистый','P'],['светит','A']];
+let g2={};
+function reset2(){ g2={q:shuffle(WORDS),i:0,h:3,combo:0,best:0,run:false,t0:0,raf:0}; hearts('h2',3); $('word').textContent='Готов?'; $('combo').textContent=''; $('prog2').textContent=`0 / ${WORDS.length}`; $('tbar').style.width='100%'; $('bProp').disabled=$('bAct').disabled=true; $('start2').hidden=false; }
+const LIMIT=6000;
+function next2(){
+  if(g2.i>=g2.q.length){ end2(true); return; }
+  $('word').textContent=g2.q[g2.i][0]; $('word').classList.remove('pop'); void $('word').offsetWidth; $('word').classList.add('pop');
+  g2.t0=performance.now(); cancelAnimationFrame(g2.raf); tick2();
+}
+function tick2(){
+  const left=1-(performance.now()-g2.t0)/LIMIT;
+  $('tbar').style.width=Math.max(0,left*100)+'%';
+  $('tbar').style.background=left<.3?'#d9443b':'#f2c84b';
+  if(left<=0){ answer2(null); return; }
+  g2.raf=requestAnimationFrame(tick2);
+}
+function answer2(ch){
+  if(!g2.run) return; cancelAnimationFrame(g2.raf);
+  const right=g2.q[g2.i][1];
+  if(ch===right){ g2.combo++; g2.best=Math.max(g2.best,g2.combo); $('combo').textContent=g2.combo>1?`КОМБО ×${g2.combo}`:''; }
+  else { g2.h--; g2.combo=0; hearts('h2',g2.h); shake($('arena')); $('combo').textContent=ch===null?'ВРЕМЯ!':`«${g2.q[g2.i][0]}» — это ${right==='P'?'свойство':'действие'}`; }
+  g2.i++; $('prog2').textContent=`${g2.i} / ${WORDS.length}`;
+  if(g2.h<=0){ end2(false); return; }
+  next2();
+}
+function end2(ok){
+  g2.run=false; cancelAnimationFrame(g2.raf); $('bProp').disabled=$('bAct').disabled=true; $('start2').hidden=false; $('start2').textContent='Ещё раз';
+  if(ok){ $('word').textContent='Победа!'; msg('m2',`Уровень пройден! Лучшее комбо: ×${g2.best}. +1 алмаз`,true); win('L2'); }
+  else { $('word').textContent='Сердечки кончились'; msg('m2','Не сдавайся, попробуй ещё раз!',false); }
+}
+$('start2').onclick=()=>{ reset2(); g2.run=true; $('start2').hidden=true; $('bProp').disabled=$('bAct').disabled=false; msg('m2','',true); next2(); };
+$('bProp').onclick=()=>answer2('P'); $('bAct').onclick=()=>answer2('A');
+document.addEventListener('keydown',e=>{ if(!g2.run) return; if(e.key==='ArrowLeft'){e.preventDefault();answer2('P');} if(e.key==='ArrowRight'){e.preventDefault();answer2('A');} });
+
+/* ===== 3. имена ===== */
+const NAMES=[['Волга',1],['река',0],['Москва',1],['город',0],['Барсик',1],['кот',0],['Марс',1],['планета',0],['Фёдор',1],['мальчик',0],['Россия',1],['страна',0],['Шарик',1],['собака',0]];
+let g3={};
+function reset3(){
+  const pick=shuffle(NAMES.filter(n=>n[1])).slice(0,6), rest=shuffle(NAMES.filter(n=>!n[1])).slice(0,6);
+  g3={h:3,found:0,list:shuffle([...pick,...rest])}; hearts('h3',3); $('prog3').textContent='0 / 6';
+  $('blocks').innerHTML=g3.list.map(([w,p],i)=>`<button class="blk" data-i="${i}">${w}</button>`).join('');
+}
+$('blocks').addEventListener('click',e=>{
+  const b=e.target.closest('.blk'); if(!b||b.disabled) return; const [w,p]=g3.list[b.dataset.i];
+  b.disabled=true;
+  if(p){ b.classList.add('found'); g3.found++; $('prog3').textContent=`${g3.found} / 6`;
+    if(g3.found===6){ msg('m3','Все собственные имена добыты! +1 алмаз',true); win('L3'); } }
+  else { b.classList.add('miss'); g3.h--; hearts('h3',g3.h); shake(b);
+    msg('m3',`«${w}» — общее имя, так называют целую группу.`,false);
+    if(g3.h<=0){ msg('m3','Сердечки кончились! Шахта обновилась, попробуй снова.',false); setTimeout(reset3,1200); } }
+});
+
+/* ===== 4. инвентарь ===== */
+const CH=[['pic','Картинки','img'],['note','Музыка','mus'],['film','Видео','vid'],['gear','Программы','exe'],['book','Тексты','txt']];
+const FILES=[['закат.png','img'],['кот.jpg','img'],['рисунок.bmp','img'],['песня.mp3','mus'],['звонок.wav','mus'],['мультик.mp4','vid'],['трейлер.avi','vid'],['игра.exe','exe'],['установка.exe','exe'],['доклад.docx','txt'],['заметки.txt','txt'],['сказка.pdf','txt']];
+let g4={};
+function reset4(){
+  g4={h:3,left:shuffle(FILES),sel:null,count:{}}; hearts('h4',3); renderInv(); $('prog4').textContent='0 / 12';
+}
+function renderInv(){
+  $('inv').innerHTML=g4.left.length?g4.left.map(([n],i)=>`<button class="slot${g4.sel===i?' sel':''}" data-i="${i}">${sprite('file',3)}${n}</button>`).join(''):'<span class="msg ok" style="padding:20px">Инвентарь чист!</span>';
+  $('chests').innerHTML=CH.map(([s,name,k])=>`<button class="chestbtn" data-k="${k}">${sprite('chest',4)}<span>${sprite(s,2)}</span>${name}<span class="n">${g4.count[k]||0} шт.</span></button>`).join('');
+}
+$('inv').addEventListener('click',e=>{ const b=e.target.closest('.slot'); if(!b) return; g4.sel=+b.dataset.i; renderInv(); });
+$('chests').addEventListener('click',e=>{
+  const b=e.target.closest('.chestbtn'); if(!b) return;
+  if(g4.sel===null){ msg('m4','Сначала нажми на файл в инвентаре.',false); return; }
+  const [n,k]=g4.left[g4.sel];
+  if(b.dataset.k===k){ g4.count[k]=(g4.count[k]||0)+1; g4.left.splice(g4.sel,1); g4.sel=null; msg('m4','',true);
+    $('prog4').textContent=`${12-g4.left.length} / 12`; renderInv();
+    if(!g4.left.length){ msg('m4','Всё по сундукам! +1 алмаз',true); win('L4'); } }
+  else { g4.h--; hearts('h4',g4.h); shake(b); msg('m4',`Посмотри на расширение .${n.split('.').pop()}`,false);
+    if(g4.h<=0){ msg('m4','Сундуки рассыпались! Начинаем заново.',false); setTimeout(reset4,1200); } }
+});
+
+/* ===== 5. босс ===== */
+const F=(name,text,s,trap)=>({name,text,s,trap}), D=(name,children,s,trap)=>({name,children,s,trap});
+const disk=D('C:',[
+  D('Игры',[ D('Minecraft',[ D('Скриншоты',[F('закат.png','Просто красивый скриншот. Клада тут нет.','pic')]) ],'grass') ]),
+  D('Школа',[ D('Информатика',[F('урок2.docx','Это файл урока. Клад ищи на острове!')]) ],'book'),
+  D('Остров',[
+    F('начало.txt','Добро пожаловать на остров! Клад спрятан там, где темно и сыро.','map'),
+    D('Пляж',[F('подсказка.txt','Тут только песок и ракушки. Возвращайся!')],'beach'),
+    D('Лес',[ D('Дупло',[F('белка.txt','Это дупло белки, тут только орехи.')]) ],'tree'),
+    D('Пещера',[
+      F('подсказка.txt','Ты в пещере! Иди глубже, в тоннель. Но не буди летучих мышей!'),
+      D('Летучие_мыши',[F('ловушка.txt','Ты разбудил мышей!','bat')],'bat',true),
+      D('Тоннель',[
+        F('подсказка.txt','Почти у цели! Клад в сундуке.'),
+        D('Динамит',[F('бум.txt','БАБАХ!','tnt')],'tnt',true),
+        D('Сундук',[F('КЛАД.txt','Ура! Ты нашёл клад! Теперь нанеси финальный удар: собери путь.','gem')],'chest')
+      ],'torch')
+    ],'bat')
+  ],'beach')
+]);
+let g5={};
+function reset5(){ g5={stack:[disk],h:3,steps:0,found:false,path:[]}; hearts('h5',3); $('steps').textContent='Шагов: 0'; $('builder').hidden=true; exRender(); }
+function exRender(){
+  const cur=g5.stack[g5.stack.length-1];
+  $('exAddr').textContent=$('exShow').checked?g5.stack.map(d=>d.name).join('\\')+(g5.stack.length===1?'\\':''):'█████████';
+  $('exUp').disabled=g5.stack.length===1;
+  $('exBody').innerHTML=cur.children.map((c,i)=>`<button class="ent" data-i="${i}">${sprite(c.s||(c.children?'folder':'file'),4)}<span>${c.name}</span></button>`).join('');
+  $('exNote').hidden=true;
+}
+function note(s,name,t){ $('exNote').hidden=false; $('exNote').innerHTML=`${sprite(s,4)}<div><span class="fn">${name}</span>${t}</div>`; }
+$('exBody').addEventListener('click',e=>{
+  const b=e.target.closest('.ent'); if(!b) return;
+  const c=g5.stack[g5.stack.length-1].children[b.dataset.i];
+  g5.steps++; $('steps').textContent='Шагов: '+g5.steps;
+  if(c.trap){ g5.h--; hearts('h5',g5.h); shake($('L5'));
+    if(g5.h<=0){ note('heart','GAME OVER','Сердечки кончились! Ты снова в начале диска C:.'); setTimeout(()=>{reset5();},1600); return; }
+    note(c.s, c.name, c.s==='tnt'?'БАБАХ! Это был динамит! −1 сердечко.':'Мыши напали! −1 сердечко. Беги назад!'); return; }
+  if(c.children){ g5.stack.push(c); exRender(); }
+  else { note(c.s||'file',c.name,c.text);
+    if(c.name==='КЛАД.txt' && !g5.found){ g5.found=true; buildTiles(); $('builder').hidden=false; $('builder').scrollIntoView({behavior:'smooth',block:'center'}); } }
+});
+$('exUp').onclick=()=>{ if(g5.stack.length>1){ g5.stack.pop(); g5.steps++; $('steps').textContent='Шагов: '+g5.steps; exRender(); } };
+$('exShow').onchange=exRender;
+const TILES=['C:','Остров','Пещера','Тоннель','Сундук','КЛАД.txt','Пляж','Лес','Летучие_мыши','Динамит','Игры'];
+const RIGHT=['C:','Остров','Пещера','Тоннель','Сундук','КЛАД.txt'];
+function buildTiles(){ g5.path=[]; g5.tiles=shuffle(TILES); drawPath(); }
+function drawPath(){
+  $('pathline').textContent=g5.path.length?g5.path.join('\\'):'\u00a0';
+  $('tiles').innerHTML=g5.tiles.map((t,i)=>`<button class="tile" data-i="${i}">${t}</button>`).join('');
+}
+$('tiles').addEventListener('click',e=>{ const b=e.target.closest('.tile'); if(!b) return; g5.path.push(g5.tiles[b.dataset.i]); drawPath(); });
+$('pDel').onclick=()=>{ g5.path.pop(); drawPath(); };
+$('pCheck').onclick=()=>{
+  const p=g5.path;
+  if(p.join('|')===RIGHT.join('|')){ msg('m5','БОСС ПОВЕРЖЕН! Путь: C:\\Остров\\Пещера\\Тоннель\\Сундук\\КЛАД.txt. +1 алмаз',true); win('L5'); return; }
+  shake($('pathline'));
+  if(p[0]!=='C:') msg('m5','Путь всегда начинается с диска C:',false);
+  else if(p[p.length-1]!=='КЛАД.txt') msg('m5','В конце пути стоит имя файла.',false);
+  else msg('m5','Почти! Проверь папки и их порядок по своим записям.',false);
+};
+
+/* ===== 6. сапёр ===== */
+const MINES=[['мой рисунок.png',0],['дз:математика.docx',1],['игра?.exe',1],['план_на_лето.txt',0],['кот/собака.jpg',1],['отчёт 2026.docx',0],['"супер".mp3',1],['урок-2.pdf',0],['звёзды*.png',1],['мама|папа.jpg',1],['Фёдор.txt',0],['песня (1).mp3',0]];
+let g6={};
+function reset6(){
+  clearInterval(g6.timer); g6={h:3,left:6,t:30,run:false,list:shuffle(MINES),timer:0}; hearts('h6',3);
+  $('t6').textContent='30 сек'; $('prog6').textContent='0 / 6';
+  $('mines').innerHTML=g6.list.map(([n],i)=>`<button class="mine" data-i="${i}" disabled>${sprite('file',2)}${n}</button>`).join('');
+}
+function end6(ok){
+  clearInterval(g6.timer); g6.run=false; $('start6').hidden=false; $('start6').textContent='Ещё раз';
+  document.querySelectorAll('.mine').forEach(m=>m.disabled=true);
+  if(ok){ msg('m6',`Все мины обезврежены за ${30-g6.t} сек! +1 алмаз`,true); win('L6'); }
+}
+$('start6').onclick=()=>{
+  reset6(); g6.run=true; $('start6').hidden=true; msg('m6','',true);
+  document.querySelectorAll('.mine').forEach(m=>m.disabled=false);
+  g6.timer=setInterval(()=>{ g6.t--; $('t6').textContent=g6.t+' сек'; if(g6.t<=0){ end6(false); msg('m6','Время вышло! Попробуй ещё раз.',false); } },1000);
+};
+$('mines').addEventListener('click',e=>{
+  const b=e.target.closest('.mine'); if(!b||!g6.run||b.disabled) return; const [n,bad]=g6.list[b.dataset.i];
+  b.disabled=true;
+  if(bad){ b.classList.add('boom'); b.innerHTML=sprite('tnt',2)+'БУМ!'; g6.left--; $('prog6').textContent=`${6-g6.left} / 6`; if(!g6.left) end6(true); }
+  else { b.classList.add('safe-hit'); g6.h--; hearts('h6',g6.h); shake(b); msg('m6',`«${n}» — нормальное имя, тут нет запрещённых символов.`,false);
+    if(g6.h<=0){ end6(false); msg('m6','Сердечки кончились! Попробуй ещё раз.',false); } }
+});
+
+/* ===== 7. мост ===== */
+const RELS=[
+ ['Велосипед','колесо','C','Велосипед состоит из колёс.'],
+ ['Берёза','дерево','K','Берёза является разновидностью дерева.'],
+ ['Ноутбук','компьютер','K','Ноутбук является разновидностью компьютера.'],
+ ['Клавиатура','клавиши','C','Клавиатура состоит из клавиш.'],
+ ['Лягушка','земноводное','K','Лягушка является разновидностью земноводных.'],
+ ['Книга','страницы','C','Книга состоит из страниц.'],
+ ['Флешка','носитель информации','K','Флешка является разновидностью носителя информации.'],
+ ['Слово','буквы','C','Слово состоит из букв.'],
+ ['Дом','комнаты','C','Дом состоит из комнат.'],
+ ['Футбол','спортивная игра','K','Футбол является разновидностью спортивной игры.']
+];
+let g7={};
+function reset7(){ g7={q:shuffle(RELS).slice(0,8),i:0,h:3,done:false}; hearts('h7',3); $('sent7').textContent=''; draw7(); }
+function draw7(){
+  const n=g7.i, cells=[];
+  cells.push(`<div class="bank">${n===0?sprite('frog',3):''}</div>`);
+  for(let k=0;k<8;k++) cells.push(`<div class="pl${k<n?' on':''}">${n>0&&n<8&&k===n-1?sprite('frog',3):''}</div>`);
+  cells.push(`<div class="bank r">${n>=8?sprite('frog',3):''}</div>`);
+  $('river').innerHTML=cells.join('');
+  $('prog7').textContent=`${Math.min(n,8)} / 8`;
+  if(n<8){ const [a,b]=g7.q[n]; $('relcard').innerHTML=`<span>${a}</span><span class="gap">?</span><span>${b}</span>`; }
+  else $('relcard').innerHTML='<span>Лягушка на том берегу!</span>';
+  $('rel1').disabled=$('rel2').disabled=n>=8;
+}
+function answer7(r){
+  if(g7.i>=8) return; const [a,b,right,sent]=g7.q[g7.i];
+  if(r===right){ $('sent7').textContent=sent; g7.i++; draw7(); msg('m7','',true);
+    if(g7.i>=8){ msg('m7','Мост построен! +1 алмаз',true); win('L7'); } }
+  else { g7.h--; hearts('h7',g7.h); shake($('relcard'));
+    msg('m7',right==='C'?`${b} — это часть объекта «${a.toLowerCase()}». Значит, «состоит из».`:`${a} — это вид объекта «${b}». Значит, «разновидность».`,false);
+    if(g7.h<=0){ msg('m7','Мост смыло! Строим заново.',false); setTimeout(reset7,1400); } }
+}
+$('rel1').onclick=()=>answer7('C'); $('rel2').onclick=()=>answer7('K');
+
+/* ===== 8. верстак ===== */
+const SYS=[
+ {name:'Велосипед',parts:['руль','рама','колесо','педали','цепь','седло'],extra:['парус','клавиатура','крыло самолёта'],
+  eff:['Ехать и возить человека','Крутиться','Быть железным'],ok:0},
+ {name:'Футбольная команда',parts:['вратарь','защитник','полузащитник','нападающий','капитан','тренер'],extra:['шайба','теннисная ракетка','дирижёр'],
+  eff:['Бегать по полю','Играть матч и забивать голы командой','Носить форму'],ok:1},
+ {name:'Часы',parts:['циферблат','часовая стрелка','минутная стрелка','механизм','батарейка','корпус'],extra:['колесо','лист бумаги','педаль'],
+  eff:['Показывать точное время','Блестеть','Тикать сами по себе'],ok:0}
+];
+let g8={};
+function reset8(){ g8={k:0,h:3}; hearts('h8',3); load8(); }
+function load8(){
+  const s=SYS[g8.k]; g8.placed=[]; g8.pile=shuffle([...s.parts,...s.extra]);
+  $('sysName').textContent='Система: '+s.name; $('prog8').textContent=`Система ${g8.k+1} / ${SYS.length}`;
+  $('effBox').hidden=true; draw8();
+}
+function draw8(){
+  $('bench').innerHTML=Array.from({length:6},(_,i)=>`<div class="${g8.placed[i]?'full':''}">${g8.placed[i]||''}</div>`).join('');
+  $('parts').innerHTML=g8.pile.map((p,i)=>`<button class="tile" data-i="${i}">${p}</button>`).join('');
+}
+$('parts').addEventListener('click',e=>{
+  const b=e.target.closest('.tile'); if(!b) return; const s=SYS[g8.k], p=g8.pile[b.dataset.i];
+  if(s.parts.includes(p)){ g8.placed.push(p); g8.pile.splice(b.dataset.i,1); draw8(); msg('m8','',true);
+    if(g8.placed.length===s.parts.length){ g8.pile=[]; draw8(); $('effBox').hidden=false;
+      $('effect').innerHTML=s.eff.map((t,i)=>`<button data-i="${i}">${t}</button>`).join(''); } }
+  else { g8.h--; hearts('h8',g8.h); shake(b); msg('m8',`«${p}» — не часть системы «${s.name.toLowerCase()}».`,false);
+    if(g8.h<=0){ msg('m8','Верстак сломался! Начнём заново.',false); setTimeout(reset8,1400); } }
+});
+$('effect').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return; const s=SYS[g8.k];
+  if(+b.dataset.i===s.ok){ b.classList.add('good'); msg('m8','Верно! Это системный эффект.',true);
+    setTimeout(()=>{ g8.k++; if(g8.k<SYS.length) load8(); else { msg('m8','Все системы собраны! +1 алмаз',true); win('L8'); } },1100); }
+  else { b.classList.add('bad'); msg('m8','Это умеет и отдельная часть. Ищи то, что может только целая система.',false); }
+});
+
+/* ===== 9. компьютер ===== */
+const BINS=[['in','Ввод','информация в компьютер','keyboard'],['out','Вывод','информация из компьютера','monitor'],['proc','Обработка','считает и думает','cpu'],['store','Хранение','запоминает','disk'],['soft','Софт','программы','app']];
+const PCI=[['Клавиатура','in','keyboard'],['Мышь','in','mouse'],['Микрофон','in','speaker'],['Монитор','out','monitor'],['Принтер','out','printer'],['Колонки','out','speaker'],['Процессор','proc','cpu'],['Жёсткий диск','store','disk'],['Флешка','store','disk'],['Браузер','soft','app'],['Графический редактор','soft','app'],['Операционная система','soft','app'],['Minecraft','soft','grass']];
+let g9={};
+function reset9(){ g9={h:3,left:shuffle(PCI),sel:null,got:{}}; hearts('h9',3); draw9(); }
+function draw9(){
+  $('pcInv').innerHTML=g9.left.length?g9.left.map(([n,,s],i)=>`<button class="slot${g9.sel===i?' sel':''}" data-i="${i}">${sprite(s,3)}${n}</button>`).join(''):'<span class="msg ok" style="padding:20px">Компьютер собран!</span>';
+  $('pcBins').innerHTML=BINS.map(([k,name,sub,s])=>`<button class="bin" data-k="${k}">${sprite(s,3)}<b>${name}</b><span class="sub">${sub}</span><span class="got">${(g9.got[k]||[]).map(x=>`<span>${x}</span>`).join('')}</span></button>`).join('');
+  $('prog9').textContent=`${PCI.length-g9.left.length} / ${PCI.length}`;
+}
+$('pcInv').addEventListener('click',e=>{ const b=e.target.closest('.slot'); if(!b) return; g9.sel=+b.dataset.i; draw9(); });
+$('pcBins').addEventListener('click',e=>{
+  const b=e.target.closest('.bin'); if(!b) return;
+  if(g9.sel===null){ msg('m9','Сначала выбери предмет.',false); return; }
+  const [n,k]=g9.left[g9.sel];
+  if(b.dataset.k===k){ (g9.got[k]=g9.got[k]||[]).push(n); g9.left.splice(g9.sel,1); g9.sel=null; msg('m9','',true); draw9();
+    if(!g9.left.length){ msg('m9','Финальный босс повержен! Ты разобрал компьютер на части. +1 алмаз',true); win('L9'); } }
+  else { g9.h--; hearts('h9',g9.h); shake(b);
+    msg('m9',k==='soft'?`«${n}» — это программа, её нельзя потрогать.`:`Подумай: «${n}» вводит, выводит, обрабатывает или хранит информацию?`,false);
+    if(g9.h<=0){ msg('m9','Компьютер рассыпался заново! Попробуй ещё раз.',false); setTimeout(reset9,1400); } }
+});
+
+/* ===== сброс ===== */
+$('reset').onclick=()=>{
+  solved.clear(); scanned.clear(); buildScene();
+  $('scanOut').innerHTML=`${sprite('qblock',5)}<div class="lines"><span class="h">Сканер готов</span><span>Выбери объект на картинке…</span></div>`;
+  reset2(); $('start2').textContent='Старт!'; reset3(); reset4(); reset5(); reset6(); $('start6').textContent='Старт!'; reset7(); reset8(); reset9();
+  document.querySelectorAll('.msg').forEach(m=>m.textContent=''); render(); window.scrollTo({top:0,behavior:'smooth'});
+};
+
+paintSprites(); buildScene(); reset2(); reset3(); reset4(); reset5(); reset6(); reset7(); reset8(); reset9(); render();
+</script>
